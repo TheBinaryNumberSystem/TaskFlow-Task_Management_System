@@ -1,0 +1,155 @@
+Ran check workspace directory contents
+Analyzed requirement.txt:L1-83
+Ran check api folder contents
+Ran check auth-api folder contents
+
+Here is the step-by-step roadmap for developing your independent **Auth API** using Node.js, Express, MongoDB, and JWT, tailored to your microservices architecture.
+
+---
+
+### Step 1: Initialize the Auth API Service
+Because this is an independent microservice, it must live as a standalone Node application inside `api/auth-api`:
+- **Initialize Node Project**: Run package manager initialization inside `api/auth-api` so it maintains its own `package.json` separate from the TMS API.
+- **Select Dependencies**:
+  - *Core framework*: Express
+  - *Database ODM*: Mongoose (for MongoDB schemas and queries)
+  - *Security & Auth*: `jsonwebtoken` (token generation/signing) and `bcrypt` or `bcryptjs` (secure password hashing)
+  - *Utilities & Middleware*: `cors` (cross-origin resource sharing for your React client), `dotenv` (environment variables), and `cookie-parser` (if you plan to store tokens in HTTP-only cookies).
+  - *Validation*: A schema validation library like `zod`, `joi`, or `express-validator` to sanitize and validate input payloads before processing.
+
+---
+
+### Step 2: Configure Environment Variables
+Inside `api/auth-api/.env`, define the configurations specific to the Auth service:
+- **Service Port**: Choose a dedicated port distinct from your future TMS API (for example, port `5001` for Auth, and `5002` for TMS).
+- **Database Connection URI**: MongoDB connection string pointing to your database instance or cluster.
+- **JWT Secrets & Expiry**: Secret key used for signing tokens and an expiration window (e.g., `1h`, `1d`, or separate Access/Refresh secrets).
+- **CORS Allowed Origins**: The URL of your React frontend to restrict unauthorized cross-origin requests.
+
+---
+
+### Step 3: Establish MongoDB Connection
+- In a dedicated database configuration module, establish a connection using Mongoose.
+- Handle connection lifecycle events: log on successful connection, catch connection errors, and gracefully handle disconnects.
+- Call this connection setup during the application startup lifecycle before listening on the port.
+
+---
+
+### Step 4: Design the User Model
+In your `models` directory, define the Mongoose schema for the user:
+- **Fields**:
+  - `name`: String, required, trimmed.
+  - `email`: String, required, unique index, lowercased, trimmed.
+  - `password`: String, required (stored strictly as a cryptographic hash).
+  - `timestamps`: Automatic tracking of `createdAt` and `updatedAt`.
+- **Model Hooks / Methods**:
+  - A pre-save hook to hash the password whenever it is created or modified.
+  - A helper method to compare candidate passwords with the stored hash.
+  - A transformation method to sanitize the user object so the password hash is stripped before sending responses to clients.
+
+---
+
+### Step 5: Implement Authentication Endpoints & Logic
+In your `controllers` and `routes`, build the following core authentication capabilities:
+
+1. **User Registration**
+   - Validate incoming payload (ensure valid email format, minimum password length, non-empty name).
+   - Check if a user with that email already exists; return a conflict status if found.
+   - Hash the password (handled by model hook or controller logic).
+   - Save the record in MongoDB.
+   - Return a success response (typically HTTP 201) with basic user details, omitting the password.
+
+2. **User Login**
+   - Validate that both email and password are provided.
+   - Query the database for the user by email.
+   - If user exists, compare the plain text password with the stored hash using bcrypt.
+   - If invalid, return a standard unauthorized error (avoid stating whether it was the email or password that failed, for security).
+   - Generate a signed JWT containing minimal user identifiers (e.g., `userId` and `email`).
+   - Deliver the token either in the JSON response body or set as a secure, HTTP-only cookie.
+
+3. **User Profile / Token Verification**
+   - Create an endpoint (e.g., `/me` or `/verify`) protected by an authentication middleware.
+   - Decodes and verifies the incoming token and fetches the corresponding user from the database.
+   - Returns the authenticated user's profile info.
+
+4. **User Logout**
+   - If using HTTP-only cookies, clear the authentication cookie.
+   - If tokens are handled purely on the client side, the frontend discards the token (or if using token revocation lists, invalidates the token in Redis).
+
+---
+
+### Step 6: Create Authentication & Validation Middleware
+- **JWT Verification Middleware**: Extracts the Bearer token from the `Authorization` header (or cookie), verifies its cryptographic signature using the secret key, attaches decoded user data to the request object, and passes control to the next handler.
+- **Input Validation Middleware**: Intercepts requests to ensure fields match expected criteria before hitting the controller, returning clean, standardized error responses if validation fails.
+- **Global Error Handling Middleware**: Catches unhandled errors across routes and returns consistent JSON error structures with appropriate HTTP status codes.
+
+---
+
+### Step 7: How This Integrates with the Future TMS API (Microservices Plan)
+Since the TMS API will be a separate Express app running on another port, plan your contract now:
+- **Shared Secret Strategy (Recommended for lightweight microservices)**:
+  - Both `auth-api` and `task-api` share the same `JWT_SECRET`.
+  - When a user logs in via `auth-api`, they receive the JWT.
+  - The frontend attaches this token to requests sent to `task-api`.
+  - `task-api` runs an identical JWT verification middleware locally without needing to make network requests to `auth-api`. It extracts `userId` and attaches it to tasks.
+- **Token Verification Endpoint Strategy**:
+  - Alternatively, `task-api` can call `auth-api`'s verification endpoint via HTTP, though sharing the verification key/secret is significantly faster and eliminates inter-service network latency.
+
+---
+
+### Step 8: Testing the Auth API Independently
+Before writing any frontend code or starting `task-api`:
+- Use an API client (such as Postman, Thunder Client, or cURL).
+- Test each scenario:
+  - Valid registration and duplicate registration attempt.
+  - Invalid inputs (malformed email, short password).
+  - Valid login (check that JWT is returned).
+  - Invalid login (wrong password / non-existent user).
+  - Accessing the protected profile endpoint with a valid token, an expired/invalid token, and no token.
+
+
+  --------------------xxxxxx-------------
+  MONGO_URI=mongodb+srv://the_binary_number_system:Mnbvcxz%4027@cluster0.abcde.mongodb.net/taskflow_auth?retryWrites=true&w=majority
+
+
+mongodb+srv://the_binary_number_system:<db_password>@destate.fgeiouj.mongodb.net/
+
+-------------------xxxxxxxxxxxx--------------------------
+TASK APIs
+
+Step 1: Initialize task-api
+
+Generate package.json with "type": "module".
+Install dependencies (express, mongoose, dotenv, cors, jsonwebtoken).
+Configure .env with dedicated PORT=5002, DB URI, and the matching JWT_SECRET.
+
+Step 2: Server & Database Setup
+
+Setup MongoDB connection for tasks.
+Configure server.js running independently on port 5002.
+
+Step 3: JWT Verification & RBAC Middleware in task-api
+
+Implement the protect and authorize middleware using the shared JWT_SECRET.
+This allows task-api to authenticate any incoming request without making network calls to auth-api.
+
+Step 4: Design Task Model (models/Task.js)
+
+Fields: Title, Description, Priority (Low, Medium, High), Status (Pending, In Progress, Completed), Due Date, assignedTo, createdBy, and timestamps.
+
+Step 5: Task Service & Controller (CRUD + RBAC)
+
+Implement business logic enforcing your RBAC table:
+Employee: view/update their own assigned tasks.
+Manager: create, assign, reprioritize, and delete any task across the team.
+Search & filter: filter by status, priority, title search, and date sorting.
+
+Step 6: Dashboard Metrics & Aggregations
+
+Endpoint for dashboard stats (total tasks, pending, completed, grouped by priority) filtered by employee or aggregated for managers.
+
+Step 7: Advanced Assignment Requirements
+
+Redis caching for task queries and cache invalidation on mutations.
+API rate limiting.
+

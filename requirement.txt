@@ -1,0 +1,83 @@
+# Project Assignment: TaskFlow – Task Management System
+
+## 1. Project Overview
+
+TaskFlow is a simple task management application that allows users to manage their daily tasks through a centralized platform.
+
+Users should be able to create tasks, organize them based on priority, track their progress, and manage their completed work.
+
+
+## 2. Project Objectives
+
+You are expected to understand and implement the following concepts:
+
+- Frontend application development.
+- Backend API development.
+- Database design and management.
+- User authentication and authorization.
+- CRUD operations.
+- Redis-based caching.
+- Cache invalidation.
+- API rate limiting.
+- Request validation and error handling.
+
+## 3. Functional Requirements
+
+### 3.1 User Management
+
+The application should support:
+
+- User registration.
+- User login and logout.
+- User authentication.
+- Individual user accounts.
+- Secure access to user-specific data.
+
+### 3.2 Task Management
+
+Users should be able to:
+
+- Create new tasks.
+- View all their tasks.
+- Update existing tasks.
+- Delete tasks.
+- Assign priorities to tasks.
+- Change task status.
+- Set task due dates.
+- Add descriptions to tasks.
+
+### 3.3 Task Categorization
+
+Each task should contain the following information:
+
+| Field       | Description                     |
+| ----------- | ------------------------------- |
+| Task Title  | Name of the task                |
+| Description | Details about the task          |
+| Priority    | Low, Medium, High               |
+| Status      | Pending, In Progress, Completed |
+| Due Date    | Expected completion date        |
+| Created At  | Task creation timestamp         |
+| Updated At  | Last modification timestamp     |
+
+### 3.4 Dashboard
+
+The application should provide an overview of the user's tasks.
+
+The dashboard should display:
+
+- Total number of tasks.
+- Pending tasks.
+- Tasks currently in progress.
+- Completed tasks.
+- Recently created tasks.
+- Tasks grouped by priority.
+
+### 3.5 Task Filtering and Searching
+
+Users should be able to:
+
+- Search tasks by title.
+- Filter tasks by status.
+- Filter tasks by priority.
+- Sort tasks by creation date or due date..

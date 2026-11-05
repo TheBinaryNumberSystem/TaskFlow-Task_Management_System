@@ -1,5 +1,23 @@
 import Task from '../models/Task.js';
+import redisClient from '../config/redis.js';
 
+/**
+ * Cache Invalidation Helper: Clears stale task and dashboard cache keys
+ */
+const invalidateTaskCache = async () => {
+    try {
+        const taskKeys = await redisClient.keys('tasks:*');
+        const dashboardKeys = await redisClient.keys('dashboard:*');
+        const allKeys = [...taskKeys, ...dashboardKeys];
+
+        if (allKeys.length > 0) {
+            await redisClient.del(allKeys);
+            console.log(`[REDIS CACHE INVALIDATED] Cleared ${allKeys.length} keys`);
+        }
+    } catch (err) {
+        console.error('Redis Cache Invalidation Error:', err.message);
+    }
+};
 
 const checkEmployeeExists = async (email, token) => {
     const authUrl = process.env.AUTH_SERVICE_URL || 'http://localhost:5001';
@@ -57,6 +75,9 @@ export const createTask = async ({ taskData, user, token }) => {
         createdBy: user.email,
     });
 
+    // invalidate stale cache
+    await invalidateTaskCache();
+
     return task;
 };
 
@@ -64,36 +85,44 @@ export const createTask = async ({ taskData, user, token }) => {
  * Get tasks with search, filter, sort & RBAC scoping
  */
 export const getTasks = async ({ query, user }) => {
-    const { search, status, priority, sortBy, order } = query;
+    // 1. Create a unique cache key based on user role, email, and query parameters
+    const cacheKey = `tasks:${user.role}:${user.email}:${JSON.stringify(query)}`;
+
+    // 2. Check Redis cache first
+    try {
+        const cachedTasks = await redisClient.get(cacheKey);
+        if (cachedTasks) {
+            console.log(`[REDIS CACHE HIT] ${cacheKey}`);
+            return JSON.parse(cachedTasks);
+        }
+    } catch (err) {
+        console.error('Redis read error:', err.message);
+    }
+
+    console.log(`[REDIS CACHE MISS] Fetching from MongoDB: ${cacheKey}`);
 
     // Base RBAC filter
     const filter = {};
     if (user.role === 'employee') {
-        // Employees only see their own assigned tasks
         filter.assignedTo = user.email;
     }
-    // Managers have no assignedTo restriction (see all tasks)
 
-    // Status filter
-    if (status) {
-        filter.status = status;
-    }
+    if (query.status) filter.status = query.status;
+    if (query.priority) filter.priority = query.priority;
+    if (query.search) filter.title = { $regex: query.search, $options: 'i' };
 
-    // Priority filter
-    if (priority) {
-        filter.priority = priority;
-    }
+    const sortField = query.sortBy || 'createdAt';
+    const sortOrder = query.order === 'asc' ? 1 : -1;
 
-    // Title search (case-insensitive regex)
-    if (search) {
-        filter.title = { $regex: search, $options: 'i' };
-    }
-
-    // Sorting
-    const sortField = sortBy || 'createdAt';
-    const sortOrder = order === 'asc' ? 1 : -1;
-
+    // 3. Query MongoDB
     const tasks = await Task.find(filter).sort({ [sortField]: sortOrder });
+
+    // 4. Save to Redis with 120-second expiration (TTL)
+    try {
+        await redisClient.set(cacheKey, JSON.stringify(tasks), { EX: 120 });
+    } catch (err) {
+        console.error('Redis write error:', err.message);
+    }
 
     return tasks;
 };
@@ -165,6 +194,10 @@ export const updateTask = async ({ taskId, updateData, user }) => {
     }
 
     const updatedTask = await task.save();
+
+    // invalidate stale cache
+    await invalidateTaskCache();
+
     return updatedTask;
 };
 
@@ -188,6 +221,9 @@ export const deleteTask = async (taskId, user) => {
     }
 
     await task.deleteOne();
+    // invalidate stale cache
+    await invalidateTaskCache();
+
     return { message: 'Task deleted successfully' };
 };
 
@@ -195,8 +231,22 @@ export const deleteTask = async (taskId, user) => {
  * Dashboard stats & metrics
  */
 export const getDashboardStats = async (user) => {
-    const matchFilter = {};
+    const cacheKey = `dashboard:${user.role}:${user.email}`;
 
+    // 1. Check Redis cache first
+    try {
+        const cachedStats = await redisClient.get(cacheKey);
+        if (cachedStats) {
+            console.log(`[REDIS CACHE HIT] ${cacheKey}`);
+            return JSON.parse(cachedStats);
+        }
+    } catch (err) {
+        console.error('Redis read error:', err.message);
+    }
+
+    console.log(`[REDIS CACHE MISS] Calculating dashboard stats from MongoDB`);
+
+    const matchFilter = {};
     if (user.role === 'employee') {
         matchFilter.assignedTo = user.email;
     }
@@ -217,7 +267,7 @@ export const getDashboardStats = async (user) => {
         },
     ]);
 
-    return stats[0] || {
+    const result = stats[0] || {
         totalTasks: 0,
         pending: 0,
         inProgress: 0,
@@ -226,6 +276,15 @@ export const getDashboardStats = async (user) => {
         mediumPriority: 0,
         lowPriority: 0,
     };
+
+    // 2. Cache in Redis for 120 seconds
+    try {
+        await redisClient.set(cacheKey, JSON.stringify(result), { EX: 120 });
+    } catch (err) {
+        console.error('Redis write error:', err.message);
+    }
+
+    return result;
 };
 
 /**

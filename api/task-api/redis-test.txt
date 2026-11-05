@@ -1,0 +1,108 @@
+Here is how to test your Redis caching step-by-step. You will test it in two ways: **watching your backend logs** and **inspecting Redis directly using `redis-cli`**.
+
+---
+
+### Prerequisites
+Make sure:
+1. **`auth-api` is running** (`http://localhost:5001`).
+2. **`task-api` is running** (`npm run dev` on `http://localhost:5002`).
+   - You should see: `Redis In-Memory Cache Connected` in the terminal!
+3. You have logged in on `auth-api` to get your **Bearer Token**.
+
+---
+
+### Test 1: Cache Miss vs. Cache Hit (Terminal Logs & Speed)
+
+1. Open Postman or Thunder Client.
+2. Send: **`GET http://localhost:5002/api/tasks`**
+   - **Header**: `Authorization: Bearer <YOUR_TOKEN>`
+3. **Look at your `task-api` terminal**:
+   ```text
+   [REDIS CACHE MISS] Fetching from MongoDB: tasks:employee:...
+   ```
+   *(Notice response time in Postman: ~60ms - 120ms)*
+
+4. **Now, immediately click "Send" a second time** with the same request.
+5. **Look at your terminal again**:
+   ```text
+   [REDIS CACHE HIT] tasks:employee:...
+   ```
+   *(Notice response time in Postman: drops to ~3ms - 8ms! It skipped MongoDB entirely and served from RAM).*
+
+---
+
+### Test 2: Inspect Stored Data Directly in `redis-cli`
+
+Open a new PowerShell terminal to inspect what is actually inside Redis memory:
+
+1. Launch the Redis CLI:
+   ```powershell
+   redis-cli
+   ```
+2. See all cached keys:
+   ```text
+   KEYS *
+   ```
+   *Output will show:*
+   ```text
+   1) "tasks:employee:alice@example.com:{}"
+   ```
+
+3. Read the actual cached data:
+   ```text
+   GET "tasks:employee:alice@example.com:{}"
+   ```
+   *Output: You will see your exact tasks in JSON string format!*
+
+4. Check the remaining expiration time (TTL):
+   ```text
+   TTL "tasks:employee:alice@example.com:{}"
+   ```
+   *Output: Shows the seconds remaining before it expires (e.g. `108`, counting down from 120).*
+
+---
+
+### Test 3: Dashboard Cache Test
+
+1. In Postman, call:
+   **`GET http://localhost:5002/api/tasks/dashboard`**
+2. 1st call terminal output:
+   ```text
+   [REDIS CACHE MISS] Calculating dashboard stats from MongoDB
+   ```
+3. 2nd call terminal output:
+   ```text
+   [REDIS CACHE HIT] dashboard:employee:alice@example.com
+   ```
+4. In `redis-cli`, run `KEYS *` again:
+   ```text
+   1) "tasks:employee:alice@example.com:{}"
+   2) "dashboard:employee:alice@example.com"
+   ```
+
+---
+
+### Test 4: Cache Invalidation Test (The Magic Part!)
+
+When data changes, the cache must be purged so the user doesn't see old data:
+
+1. Create a task via **`POST http://localhost:5002/api/tasks`** (or update a task via `PUT`).
+2. **Look at your `task-api` terminal**:
+   ```text
+   [REDIS CACHE INVALIDATED] Cleared 2 keys
+   ```
+3. In `redis-cli`, check the keys:
+   ```text
+   KEYS *
+   ```
+   *Output: `(empty list or set)` — Redis immediately dumped the stale keys!*
+
+4. Send **`GET http://localhost:5002/api/tasks`** again:
+   ```text
+   [REDIS CACHE MISS] Fetching from MongoDB
+   ```
+   *It queries MongoDB fresh and returns your newly created task!*
+
+---
+
+Run these 4 tests and watch your terminal logs and `redis-cli` — seeing `[REDIS CACHE HIT]` and `[REDIS CACHE INVALIDATED]` confirm that your caching layer is working properly!

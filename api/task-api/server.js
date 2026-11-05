@@ -3,6 +3,7 @@ import dotenv from 'dotenv';
 import cors from 'cors';
 import connectDB from './config/db.js';
 import taskRoutes from './routes/taskRoutes.js';
+import { apiLimiter } from './middleware/rateLimiter.js';
 
 // Load environment variables
 dotenv.config();
@@ -19,11 +20,12 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// Health check endpoint
+// Health check
 app.get('/health', (req, res) => {
     res.status(200).json({ status: 'ok', service: 'task-api' });
 });
 
+app.use('/api/tasks', apiLimiter);
 app.use('/api/tasks', taskRoutes);
 
 // Port listener (Port 5002)

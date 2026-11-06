@@ -20,10 +20,10 @@ console.log("CLIENT_URL =", process.env.CLIENT_URL);
 //     origin: process.env.CLIENT_URL,
 //     credentials: true,
 // }));
+
 app.use(cors({
-    origin: process.env.CLIENT_URL,
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
+    origin: true,
+    credentials: true
 }));
 
 app.use(express.json());

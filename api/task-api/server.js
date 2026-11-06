@@ -57,6 +57,6 @@ app.use('/tasks', taskRoutes);
 
 // Port listener (Port 5002)
 const PORT = process.env.PORT || 5002;
-app.listen(PORT, () => {
-    console.log(`Task API service running in ${process.env.NODE_ENV} mode on port ${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Task API service running on port ${PORT}`);
 });

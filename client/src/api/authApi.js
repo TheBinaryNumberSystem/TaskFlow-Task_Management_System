@@ -1,6 +1,11 @@
 import axiosClient from './axiosClient.js';
 
-const AUTH_URL = import.meta.env.VITE_AUTH_API_URL || 'http://localhost:5001/api/auth';
+let rawAuthUrl = import.meta.env.VITE_AUTH_API_URL || 'http://localhost:5001/api/auth';
+rawAuthUrl = rawAuthUrl.trim().replace(/\/+$/, '');
+if (!rawAuthUrl.endsWith('/api/auth') && !rawAuthUrl.endsWith('/auth')) {
+  rawAuthUrl = `${rawAuthUrl}/api/auth`;
+}
+const AUTH_URL = rawAuthUrl;
 
 export const authApi = {
   // Register a new user

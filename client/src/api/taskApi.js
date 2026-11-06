@@ -1,6 +1,11 @@
 import axiosClient from './axiosClient.js';
 
-const TASK_URL = import.meta.env.VITE_TASK_API_URL || 'http://localhost:5002/api/tasks';
+let rawTaskUrl = import.meta.env.VITE_TASK_API_URL || 'http://localhost:5002/api/tasks';
+rawTaskUrl = rawTaskUrl.trim().replace(/\/+$/, '');
+if (!rawTaskUrl.endsWith('/api/tasks') && !rawTaskUrl.endsWith('/tasks')) {
+  rawTaskUrl = `${rawTaskUrl}/api/tasks`;
+}
+const TASK_URL = rawTaskUrl;
 
 export const taskApi = {
   // Get all tasks with query filter, search, sort

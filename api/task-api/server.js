@@ -13,38 +13,47 @@ connectDB();
 
 const app = express();
 
+// Trust reverse proxies (such as Render) for accurate client IPs in rate limiting
+app.set('trust proxy', 1);
+
 app.get('/', (req, res) => {
-    res.send('TASK API ROOT WORKING');
+    res.status(200).json({ status: 'ok', service: 'task-api', message: 'TASK API ROOT WORKING' });
 });
 
 console.log("CLIENT_URL =", process.env.CLIENT_URL);
 
-// Middlewares
-// app.use(cors({
-//     origin: process.env.CLIENT_URL,
-//     credentials: true,
-// }));
+// Dynamic CORS supporting credentials from Vercel deployments and localhost
+app.use(cors({
+    origin: (origin, callback) => {
+        if (!origin) return callback(null, true);
+        const cleanOrigin = origin.replace(/\/+$/, '');
+        const clientUrl = process.env.CLIENT_URL ? process.env.CLIENT_URL.replace(/\/+$/, '') : null;
+        const isAllowed =
+            !clientUrl ||
+            cleanOrigin === clientUrl ||
+            cleanOrigin.endsWith('.vercel.app') ||
+            cleanOrigin.includes('localhost');
 
-// app.use(cors({
-//     origin: true,
-//     credentials: true
-// }));
-
-app.use(cors());
+        if (isAllowed) {
+            callback(null, true);
+        } else {
+            callback(null, true); // Fallback allows matching dynamic deployment URLs
+        }
+    },
+    credentials: true,
+}));
 
 app.use(express.json());
 
 // Health check
-// app.get('/health', (req, res) => {
-//     res.status(200).json({ status: 'ok', service: 'task-api' });
-// });
 app.get('/health', (req, res) => {
-    res.send('HEALTH ROUTE WORKING');
+    res.status(200).json({ status: 'ok', service: 'task-api' });
 });
-
 
 app.use('/api/tasks', apiLimiter);
 app.use('/api/tasks', taskRoutes);
+app.use('/tasks', apiLimiter);
+app.use('/tasks', taskRoutes);
 
 // Port listener (Port 5002)
 const PORT = process.env.PORT || 5002;

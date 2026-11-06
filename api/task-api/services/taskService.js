@@ -5,6 +5,9 @@ import redisClient from '../config/redis.js';
  * Cache Invalidation Helper: Clears stale task and dashboard cache keys
  */
 const invalidateTaskCache = async () => {
+    if (!redisClient?.isReady) {
+        return;
+    }
     try {
         const taskKeys = await redisClient.keys('tasks:*');
         const dashboardKeys = await redisClient.keys('dashboard:*');
@@ -20,7 +23,11 @@ const invalidateTaskCache = async () => {
 };
 
 const checkEmployeeExists = async (email, token) => {
-    const authUrl = process.env.AUTH_SERVICE_URL || 'http://localhost:5001';
+    let authUrl = process.env.AUTH_SERVICE_URL || 'http://localhost:5001';
+    authUrl = authUrl.trim().replace(/\/+$/, '');
+    if (authUrl.endsWith('/api/auth')) {
+        authUrl = authUrl.replace(/\/api\/auth$/, '');
+    }
 
     try {
         const response = await fetch(`${authUrl}/api/auth/verify-employee/${encodeURIComponent(email)}`, {
@@ -88,15 +95,17 @@ export const getTasks = async ({ query, user }) => {
     // 1. Create a unique cache key based on user role, email, and query parameters
     const cacheKey = `tasks:${user.role}:${user.email}:${JSON.stringify(query)}`;
 
-    // 2. Check Redis cache first
-    try {
-        const cachedTasks = await redisClient.get(cacheKey);
-        if (cachedTasks) {
-            console.log(`[REDIS CACHE HIT] ${cacheKey}`);
-            return JSON.parse(cachedTasks);
+    // 2. Check Redis cache first (if ready)
+    if (redisClient?.isReady) {
+        try {
+            const cachedTasks = await redisClient.get(cacheKey);
+            if (cachedTasks) {
+                console.log(`[REDIS CACHE HIT] ${cacheKey}`);
+                return JSON.parse(cachedTasks);
+            }
+        } catch (err) {
+            console.error('Redis read error:', err.message);
         }
-    } catch (err) {
-        console.error('Redis read error:', err.message);
     }
 
     console.log(`[REDIS CACHE MISS] Fetching from MongoDB: ${cacheKey}`);
@@ -117,11 +126,13 @@ export const getTasks = async ({ query, user }) => {
     // 3. Query MongoDB
     const tasks = await Task.find(filter).sort({ [sortField]: sortOrder });
 
-    // 4. Save to Redis with 120-second expiration (TTL)
-    try {
-        await redisClient.set(cacheKey, JSON.stringify(tasks), { EX: 120 });
-    } catch (err) {
-        console.error('Redis write error:', err.message);
+    // 4. Save to Redis with 120-second expiration (TTL) if cache is ready
+    if (redisClient?.isReady) {
+        try {
+            await redisClient.set(cacheKey, JSON.stringify(tasks), { EX: 120 });
+        } catch (err) {
+            console.error('Redis write error:', err.message);
+        }
     }
 
     return tasks;
@@ -233,15 +244,17 @@ export const deleteTask = async (taskId, user) => {
 export const getDashboardStats = async (user) => {
     const cacheKey = `dashboard:${user.role}:${user.email}`;
 
-    // 1. Check Redis cache first
-    try {
-        const cachedStats = await redisClient.get(cacheKey);
-        if (cachedStats) {
-            console.log(`[REDIS CACHE HIT] ${cacheKey}`);
-            return JSON.parse(cachedStats);
+    // 1. Check Redis cache first (if ready)
+    if (redisClient?.isReady) {
+        try {
+            const cachedStats = await redisClient.get(cacheKey);
+            if (cachedStats) {
+                console.log(`[REDIS CACHE HIT] ${cacheKey}`);
+                return JSON.parse(cachedStats);
+            }
+        } catch (err) {
+            console.error('Redis read error:', err.message);
         }
-    } catch (err) {
-        console.error('Redis read error:', err.message);
     }
 
     console.log(`[REDIS CACHE MISS] Calculating dashboard stats from MongoDB`);
@@ -277,11 +290,13 @@ export const getDashboardStats = async (user) => {
         lowPriority: 0,
     };
 
-    // 2. Cache in Redis for 120 seconds
-    try {
-        await redisClient.set(cacheKey, JSON.stringify(result), { EX: 120 });
-    } catch (err) {
-        console.error('Redis write error:', err.message);
+    // 2. Cache in Redis for 120 seconds if cache is ready
+    if (redisClient?.isReady) {
+        try {
+            await redisClient.set(cacheKey, JSON.stringify(result), { EX: 120 });
+        } catch (err) {
+            console.error('Redis write error:', err.message);
+        }
     }
 
     return result;

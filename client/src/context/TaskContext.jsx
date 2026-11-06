@@ -45,7 +45,8 @@ export const TaskProvider = ({ children }) => {
         setTasks(response.tasks);
       }
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to fetch tasks');
+      console.error('Fetch tasks error:', err);
+      toast.error(err.response?.data?.message || err.message || 'Failed to fetch tasks');
     } finally {
       setLoadingTasks(false);
     }
@@ -60,7 +61,8 @@ export const TaskProvider = ({ children }) => {
         setDashboardStats(response.stats);
       }
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to load dashboard statistics');
+      console.error('Dashboard stats error:', err);
+      toast.error(err.response?.data?.message || err.message || 'Failed to load dashboard statistics');
     } finally {
       setLoadingStats(false);
     }
@@ -77,7 +79,8 @@ export const TaskProvider = ({ children }) => {
         return response.task;
       }
     } catch (err) {
-      const msg = err.response?.data?.message || 'Could not create task';
+      console.error('Create task error details:', err);
+      const msg = err.response?.data?.message || err.message || 'Could not create task';
       toast.error(msg);
       throw err;
     }
@@ -96,7 +99,8 @@ export const TaskProvider = ({ children }) => {
         return response.task;
       }
     } catch (err) {
-      const msg = err.response?.data?.message || 'Could not update task';
+      console.error('Update task error details:', err);
+      const msg = err.response?.data?.message || err.message || 'Could not update task';
       toast.error(msg);
       throw err;
     }
@@ -110,7 +114,8 @@ export const TaskProvider = ({ children }) => {
       toast.success('Task deleted successfully!');
       fetchDashboardStats();
     } catch (err) {
-      const msg = err.response?.data?.message || 'Could not delete task';
+      console.error('Delete task error details:', err);
+      const msg = err.response?.data?.message || err.message || 'Could not delete task';
       toast.error(msg);
       throw err;
     }
